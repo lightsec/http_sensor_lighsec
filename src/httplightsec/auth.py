@@ -14,9 +14,17 @@ kdf_factory = KeyDerivationFunctionFactory( Nist800, SHA256Hash(), 256 ) # 512 )
 sensor = SensorHelper( kdf_factory, SHA256Hash, AESCTRCipher )
 
 
-def install_secrets_from_config_file():
-    config = ConfigParser.RawConfigParser()
-    config.read("../../config.ini")
-    AUTH_KEY = config.get('Sensor', 'authkey')
-    ENC_KEY = config.get('Sensor', 'enckey')
-    sensor.install_secrets(AUTH_KEY, ENC_KEY)
+class ConfigFileReader(object):
+    
+    def __init__(self, file_path):
+        self.config = ConfigParser.RawConfigParser()
+        self.config.read(file_path)
+
+    def read_secrets_and_install(self):
+        AUTH_KEY = self.config.get('Sensor', 'authkey')
+        ENC_KEY = self.config.get('Sensor', 'enckey')
+        sensor.install_secrets(AUTH_KEY, ENC_KEY)
+    
+    def configure_app_secret_key(self):
+        from httplightsec.app import app
+        app.secret_key = self.config.get('App', 'secret')
