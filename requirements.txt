@@ -1,0 +1,7 @@
+
+# Development versions
+-e git+https://github.com/lightsec/pyNist800-108.git#egg=pynist800108
+-e git+https://github.com/lightsec/liblightsec.git#egg=liblightsec
+
+# Let's reuse the requirements specified in setup.py
+-e .
