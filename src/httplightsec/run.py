@@ -10,4 +10,5 @@ from httplightsec.views import *
 
 
 if __name__ == "__main__":
+    install_secrets_from_config_file()
     app.run()
