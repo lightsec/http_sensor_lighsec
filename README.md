@@ -25,3 +25,11 @@ You can install them using the _requirements.txt_ file in the following way:
 
 Usage
 -----
+
+1. Copy the _UPDATEME.ini_ file renaming it to __config.ini__.
+
+2. Update the values within brackets.
+
+3. Run the web server.
+   
+    ```python webapp.py```
