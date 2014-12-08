@@ -10,8 +10,8 @@ from lightsec.tools.key_derivation import KeyDerivationFunctionFactory, Nist800
 from lightsec.tools.encryption import AESCTRCipher
 
 
-kdf_factory = KeyDerivationFunctionFactory( Nist800, SHA256Hash(), 256 ) # 512 ) 
-sensor = SensorHelper( kdf_factory, SHA256Hash, AESCTRCipher )
+kdf_factory = KeyDerivationFunctionFactory(Nist800, SHA256Hash(), 256)  # 512 )
+sensor = SensorHelper(kdf_factory, SHA256Hash, AESCTRCipher)
 
 
 class ConfigFileReader(object):
@@ -20,7 +20,7 @@ class ConfigFileReader(object):
         self.config = ConfigParser.RawConfigParser()
         self.config.read(file_path)
 
-    def read_secrets_and_install(self):
+    def read_secrets_and_install(self, identifier):
         AUTH_KEY = self.config.get('Sensor', 'authkey')
         ENC_KEY = self.config.get('Sensor', 'enckey')
         sensor.install_secrets(AUTH_KEY, ENC_KEY)

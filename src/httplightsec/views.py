@@ -11,6 +11,7 @@ from httplightsec.app import app
 from httplightsec.auth import sensor
 
 
+SENSOR_ID = "sensor1"
 USERID_ARG = 'userid'
 ENCRYPTED_ARG = 'encryptedMsg'
 A_ARG = 'a'
@@ -118,9 +119,13 @@ def show_value():
         # json_body = request.get_json(force=True) # force means that I always expect a json
         sensor.create_keys(user_id, request.args[A_ARG], float(request.args[INIT_TIME_ARG]),
                            float(request.args[EXP_TIME_ARG]), request.args[COUNTER_ARG],
-                           identifier=user_id)
-        # FIXME: not really needed as I expect nothing appart from the authentication info!
-        # sensor.decrypt(id_user, ciphertext)
-        # self.assertTrue( sensor.msg_is_authentic( deciphertext, mactext, id_user, stuff["a"], stuff["init_time"], user.initial_counter ) )
+                           identifier=SENSOR_ID)
+        # WARNING: not really needed as I expect nothing apart from the authentication info,
+        # but our algorithm expect this so the counter used in the ciphering increases.
+        enc_ba = binascii.unhexlify(request.args[ENCRYPTED_ARG])
+        mac_ba = binascii.unhexlify(request.args[MAC_ARG])
+        decoded_msg = sensor.decrypt(user_id, enc_ba)  # We just use it to check the mac
+        assert sensor.msg_is_authentic(decoded_msg, mac_ba, user_id, request.args[A_ARG],
+                                       request.args[INIT_TIME_ARG], request.args[COUNTER_ARG])
 
     return get_response(user_id, "Nice message.")
