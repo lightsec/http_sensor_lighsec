@@ -120,12 +120,17 @@ def show_value():
         sensor.create_keys(user_id, request.args[A_ARG], float(request.args[INIT_TIME_ARG]),
                            float(request.args[EXP_TIME_ARG]), request.args[COUNTER_ARG],
                            identifier=SENSOR_ID)
-        # WARNING: not really needed as I expect nothing apart from the authentication info,
-        # but our algorithm expect this so the counter used in the ciphering increases.
-        enc_ba = binascii.unhexlify(request.args[ENCRYPTED_ARG])
-        mac_ba = binascii.unhexlify(request.args[MAC_ARG])
+
+    # WARNING: not really needed as I expect nothing apart from the authentication info,
+    # but our algorithm expect this so the counter used in the ciphering increases.
+    enc_ba = binascii.unhexlify(request.args[ENCRYPTED_ARG])
+    mac_ba = binascii.unhexlify(request.args[MAC_ARG])
+    try:
         decoded_msg = sensor.decrypt(user_id, enc_ba)  # We just use it to check the mac
-        assert sensor.msg_is_authentic(decoded_msg, mac_ba, user_id, request.args[A_ARG],
-                                       request.args[INIT_TIME_ARG], request.args[COUNTER_ARG])
+        if not sensor.msg_is_authentic(decoded_msg, mac_ba, user_id, request.args[A_ARG], request.args[INIT_TIME_ARG],
+                                       request.args[COUNTER_ARG]):
+            return not_authorized()
+    except (UnauthorizedException, NoLongerAuthorizedException):
+        return not_authorized()
 
     return get_response(user_id, "Nice message.")

@@ -50,7 +50,7 @@ class HttpSensorTestCase(unittest.TestCase):
     
     def test_not_authorized(self):
         # the user is not logged yet
-        rv = self.app.get('/value', query_string={USERID_ARG: self.USER_ID})
+        rv = self.app.get('/value', query_string={USERID_ARG: self.USER_ID, ENCRYPTED_ARG: "666f6f", MAC_ARG: "626172"})
         assert rv.status == '401 UNAUTHORIZED'  # keying info not sent
 
     def _get_user_helper(self, user_id, stuff):
