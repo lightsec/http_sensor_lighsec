@@ -1,11 +1,13 @@
-'''
+"""
 Created on 30/11/2014
 
 @author: Aitor Gomez Goiri <aitor.gomez@deusto.es>
-'''
+"""
 import os
 import unittest
+import binascii
 import tempfile
+from flask.json import loads
 from Crypto.Hash.SHA256 import SHA256Hash
 from lightsec.helpers import BaseStationHelper, SensorHelper, UserHelper
 from lightsec.tools.key_derivation import KeyDerivationFunctionFactory, Nist800
@@ -15,6 +17,7 @@ from httplightsec.auth import sensor
 from httplightsec.views import *
 
 app.secret_key = os.urandom(24)
+
 
 class HttpSensorTestCase(unittest.TestCase):
 
@@ -26,19 +29,19 @@ class HttpSensorTestCase(unittest.TestCase):
     def setUp(self):
         self.app = app.test_client()
         
-        kdf_factory = KeyDerivationFunctionFactory( Nist800, SHA256Hash(), 256 ) # 512 ) 
+        kdf_factory = KeyDerivationFunctionFactory(Nist800, SHA256Hash(), 256)  # 512 )
         self.base_station = BaseStationHelper(kdf_factory)
         self.base_station.install_secrets(self.SENSOR_ID, self.AUTH_KEY,
                                           self.ENC_KEY)
         stuff = self.base_station.create_keys(self.USER_ID, self.SENSOR_ID, 10)
         self.user = UserHelper(self.SENSOR_ID, stuff["kenc"], AESCTRCipher,
                                stuff["kauth"], SHA256Hash, self.USER_ID,
-                               stuff["a"], stuff["init_time"], stuff["exp_time"] )
+                               stuff["a"], stuff["init_time"], stuff["exp_time"])
         self.stuff = stuff
         
         sensor.install_secrets(self.AUTH_KEY, self.ENC_KEY, identifier=self.USER_ID)
 
-    #def tearDown(self):
+    # def tearDown(self):
 
     def test_root(self):
         rv = self.app.get('/')
@@ -46,13 +49,38 @@ class HttpSensorTestCase(unittest.TestCase):
 
     def test_not_enough_info_for_the_first_communication(self):
         rv = self.app.get('/value', query_string={'hello': 'world'})
-        assert rv.status=='400 BAD REQUEST' # userid was not sent!
+        assert rv.status == '400 BAD REQUEST'  # userid was not sent!
     
     def test_not_authorized(self):
         # the user is not logged yet
         rv = self.app.get('/value', query_string={USERID_ARG: self.USER_ID})
-        assert rv.status=='401 UNAUTHORIZED' # userid was not sent!
+        assert rv.status == '401 UNAUTHORIZED'  # keying info not sent
 
+    def _get_user_helper(self, user_id, stuff):
+        return UserHelper(self.SENSOR_ID, stuff["kenc"], AESCTRCipher, stuff["kauth"],
+                           SHA256Hash, user_id, stuff["a"], stuff["init_time"], stuff["exp_time"])
+
+    def test_value_with_authorization(self):
+        stuff = self.base_station.create_keys(self.USER_ID, self.SENSOR_ID, 20)
+        uh = self._get_user_helper(self.USER_ID, stuff)
+
+        test_message = "holamundo"
+        qs = {
+            USERID_ARG: self.USER_ID,
+            A_ARG: self.stuff['a'],
+            INIT_TIME_ARG: int(self.stuff['init_time']),
+            EXP_TIME_ARG: self.stuff['exp_time'],
+            COUNTER_ARG: uh.initial_counter,
+            ENCRYPTED_ARG: binascii.hexlify(uh.encrypt(test_message)),
+            MAC_ARG: binascii.hexlify(uh.mac(test_message))
+        }
+
+        rv = self.app.get('/value', query_string=qs)
+        assert rv.status == '200 OK'  # userid was not sent!
+        resp_obj = loads(rv.data)
+        assert CIPHERED_RESPONSE_FIELD in resp_obj
+        assert MAC_RESPONSE_FIELD in resp_obj
+        # TODO check that the ciphered text is right!
 
 if __name__ == '__main__':
     unittest.main()
