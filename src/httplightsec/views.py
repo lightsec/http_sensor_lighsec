@@ -5,7 +5,7 @@ Created on 16/11/2014
 '''
 
 import binascii
-from flask import redirect, request, session, render_template, url_for, jsonify
+from flask import abort, redirect, request, session, render_template, url_for, jsonify
 from lightsec.exceptions import UnauthorizedException, NoLongerAuthorizedException
 from httplightsec.app import app
 from httplightsec.auth import sensor
@@ -28,7 +28,7 @@ def index():
     return "This is a sensor!"
 
 
-def json_error(status, error=None, msg=None):
+def json_error(status, msg=None):
     message = {'status': status, 'message': msg}
     resp = jsonify(message)
     resp.status_code = status
@@ -36,26 +36,26 @@ def json_error(status, error=None, msg=None):
 
 
 @app.errorhandler(400)
-def incorrect_request(error=None, msg=None):
+def incorrect_request(error=None):
     message = 'Incorrect request arguments.'
-    if msg is not None:
-        message += "\n" + msg
+    if error is not None:
+        message += "\n" + error.description
     return json_error(400, msg=message)
 
 
 @app.errorhandler(401)
-def not_authorized(error=None, msg=None):
+def not_authorized(error=None):
     message = 'Unauthorized content.'
-    if msg is not None:
-        message += "\n" + msg
+    if error is not None:
+        message += "\n" + error.description
     return json_error(401, msg=message)
 
 
 @app.errorhandler(404)
-def not_found(error=None, msg=None):
+def not_found(error=None):
     message = 'Not Found: %s.' % request.url
-    if msg is not None:
-        message += "\n" + msg
+    if error is not None:
+        message += "\n" + error.description
     return json_error(404, msg=message)
 
 
@@ -101,7 +101,7 @@ def encrypt_message(id_user, unencrypted_message):
         }
         return jsonify(resp)
     except (UnauthorizedException, NoLongerAuthorizedException):
-        return not_authorized()
+        abort(401)
 
 
 def login_required(f):
@@ -109,7 +109,7 @@ def login_required(f):
         # USERID must be sent either via argument or via cookies
         user_id = get_userid_and_store(request.args)
         if not user_id:
-            return incorrect_request(msg="An argument named '%s' was expected." % USERID_ARG)
+            abort(400, description="An argument named '%s' was expected." % USERID_ARG)
 
         if are_first_communication_args(request.args):
             # json_body = request.get_json(force=True) # force means that I always expect a json
@@ -126,9 +126,9 @@ def login_required(f):
             decoded_msg = sensor.decrypt(user_id, enc_ba)  # We just use it to check the mac
             if not sensor.msg_is_authentic(decoded_msg, mac_ba, user_id, request.args[A_ARG], request.args[INIT_TIME_ARG],
                                            request.args[COUNTER_ARG]):
-                return not_authorized()
+                abort(401)
         except (UnauthorizedException, NoLongerAuthorizedException):
-            return not_authorized()
+            abort(401)
 
         # call to the original function
         unencrypted_msg = f(*args, **kwargs)
