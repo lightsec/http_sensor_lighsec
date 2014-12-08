@@ -62,7 +62,7 @@ def not_found(error=None, msg=None):
 def get_userid_and_store(args):
     """
     Gets the userid either from args or the session information (cookies).
-    
+
     When it is taken from the args, it also stores it in the session.
     """
     userid = args.get(USERID_ARG)
@@ -91,10 +91,10 @@ def are_first_communication_args(args):
     return True
 
 
-def get_response(id_user, msg):
+def encrypt_message(id_user, unencrypted_message):
     try:
-        cipherresp = sensor.encrypt(id_user, msg)
-        macresp = sensor.mac(msg, id_user)
+        cipherresp = sensor.encrypt(id_user, unencrypted_message)
+        macresp = sensor.mac(unencrypted_message, id_user)
         resp = {
             CIPHERED_RESPONSE_FIELD: binascii.hexlify(cipherresp),
             MAC_RESPONSE_FIELD: binascii.hexlify(macresp)
@@ -104,33 +104,40 @@ def get_response(id_user, msg):
         return not_authorized()
 
 
-@app.route("/value")
-# @login_required # TODO something similar!
-def show_value():
-    # In http it make sense to receive an empty request,
-    # so ENCRYPTED_ARG and MAC_ARG might not be sent by the client.
+def login_required(f):
+    def wrapped(*args, **kwargs):
+        # USERID must be sent either via argument or via cookies
+        user_id = get_userid_and_store(request.args)
+        if not user_id:
+            return incorrect_request(msg="An argument named '%s' was expected." % USERID_ARG)
 
-    # USERID must be sent either via argument or via cookies
-    user_id = get_userid_and_store(request.args)
-    if not user_id:
-        return incorrect_request(msg="An argument named '%s' was expected." % USERID_ARG)
+        if are_first_communication_args(request.args):
+            # json_body = request.get_json(force=True) # force means that I always expect a json
+            sensor.create_keys(user_id, request.args[A_ARG], float(request.args[INIT_TIME_ARG]),
+                               float(request.args[EXP_TIME_ARG]), request.args[COUNTER_ARG],
+                               identifier=SENSOR_ID)
 
-    if are_first_communication_args(request.args):
-        # json_body = request.get_json(force=True) # force means that I always expect a json
-        sensor.create_keys(user_id, request.args[A_ARG], float(request.args[INIT_TIME_ARG]),
-                           float(request.args[EXP_TIME_ARG]), request.args[COUNTER_ARG],
-                           identifier=SENSOR_ID)
-
-    # WARNING: not really needed as I expect nothing apart from the authentication info,
-    # but our algorithm expect this so the counter used in the ciphering increases.
-    enc_ba = binascii.unhexlify(request.args[ENCRYPTED_ARG])
-    mac_ba = binascii.unhexlify(request.args[MAC_ARG])
-    try:
-        decoded_msg = sensor.decrypt(user_id, enc_ba)  # We just use it to check the mac
-        if not sensor.msg_is_authentic(decoded_msg, mac_ba, user_id, request.args[A_ARG], request.args[INIT_TIME_ARG],
-                                       request.args[COUNTER_ARG]):
+        # In http it makes sense to receive an empty request,
+        # so ENCRYPTED_ARG and MAC_ARG might not be sent by the client.
+        # However, our algorithm expects this so the counter used in the ciphering increases.
+        enc_ba = binascii.unhexlify(request.args[ENCRYPTED_ARG])
+        mac_ba = binascii.unhexlify(request.args[MAC_ARG])
+        try:
+            decoded_msg = sensor.decrypt(user_id, enc_ba)  # We just use it to check the mac
+            if not sensor.msg_is_authentic(decoded_msg, mac_ba, user_id, request.args[A_ARG], request.args[INIT_TIME_ARG],
+                                           request.args[COUNTER_ARG]):
+                return not_authorized()
+        except (UnauthorizedException, NoLongerAuthorizedException):
             return not_authorized()
-    except (UnauthorizedException, NoLongerAuthorizedException):
-        return not_authorized()
 
-    return get_response(user_id, "Nice message.")
+        # call to the original function
+        unencrypted_msg = f(*args, **kwargs)
+        return encrypt_message(user_id, unencrypted_msg)
+    wrapped.__name__ = f.__name__
+    wrapped.__doc__  = f.__doc__
+    return wrapped
+
+@app.route("/value")
+@login_required
+def show_value():
+    return "Nice message."
