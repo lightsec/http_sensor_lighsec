@@ -20,7 +20,7 @@ class ConfigFileReader(object):
         self.config = ConfigParser.RawConfigParser()
         self.config.read(file_path)
 
-    def read_secrets_and_install(self, identifier):
+    def read_secrets_and_install(self):
         AUTH_KEY = self.config.get('Sensor', 'authkey')
         ENC_KEY = self.config.get('Sensor', 'enckey')
         sensor.install_secrets(AUTH_KEY, ENC_KEY)

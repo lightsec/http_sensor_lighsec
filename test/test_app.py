@@ -14,19 +14,20 @@ from lightsec.tools.encryption import AESCTRCipher
 from httplightsec.app import app
 from httplightsec.auth import sensor
 from httplightsec.views import *
+from httplightsec.utils import USERID_ARG, ENCRYPTED_ARG, A_ARG, INIT_TIME_ARG, EXP_TIME_ARG, COUNTER_ARG, MAC_ARG, \
+    CIPHERED_RESPONSE_FIELD, MAC_RESPONSE_FIELD
 
 app.secret_key = os.urandom(24)
 
 
 class HttpSensorTestCase(unittest.TestCase):
-
     USER_ID = "user1"
     AUTH_KEY = "testkey1"
     ENC_KEY = "testkey2"
 
     def setUp(self):
         self.app = app.test_client()
-        
+
         kdf_factory = KeyDerivationFunctionFactory(Nist800, SHA256Hash(), 256)  # 512 )
         self.base_station = BaseStationHelper(kdf_factory)
         self.base_station.install_secrets(SENSOR_ID, self.AUTH_KEY, self.ENC_KEY)
@@ -35,7 +36,7 @@ class HttpSensorTestCase(unittest.TestCase):
                                stuff["kauth"], SHA256Hash, self.USER_ID,
                                stuff["a"], stuff["init_time"], stuff["exp_time"])
         self.stuff = stuff
-        
+
         sensor.install_secrets(self.AUTH_KEY, self.ENC_KEY, identifier=SENSOR_ID)
 
     # def tearDown(self):
@@ -47,7 +48,7 @@ class HttpSensorTestCase(unittest.TestCase):
     def test_not_enough_info_for_the_first_communication(self):
         rv = self.app.get('/value', query_string={'hello': 'world'})
         assert rv.status == '400 BAD REQUEST'  # userid was not sent!
-    
+
     def test_not_authorized(self):
         # the user is not logged yet
         rv = self.app.get('/value', query_string={USERID_ARG: self.USER_ID, ENCRYPTED_ARG: "666f6f", MAC_ARG: "626172"})
@@ -55,7 +56,7 @@ class HttpSensorTestCase(unittest.TestCase):
 
     def _get_user_helper(self, user_id, stuff):
         return UserHelper(SENSOR_ID, stuff["kenc"], AESCTRCipher, stuff["kauth"],
-                           SHA256Hash, user_id, stuff["a"], stuff["init_time"], stuff["exp_time"])
+                          SHA256Hash, user_id, stuff["a"], stuff["init_time"], stuff["exp_time"])
 
     def test_value_with_authorization(self):
         uh = self._get_user_helper(self.USER_ID, self.stuff)
@@ -90,6 +91,7 @@ class HttpSensorTestCase(unittest.TestCase):
 
         # 2. Test that the user can validate the response received
         assert uh.msg_is_authentic(deciphered_resp, mac_resp_ba)
+
 
 if __name__ == '__main__':
     unittest.main()
