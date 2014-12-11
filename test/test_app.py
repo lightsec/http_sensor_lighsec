@@ -58,7 +58,25 @@ class HttpSensorTestCase(unittest.TestCase):
         return UserHelper(SENSOR_ID, stuff["kenc"], AESCTRCipher, stuff["kauth"],
                           SHA256Hash, user_id, stuff["a"], stuff["init_time"], stuff["exp_time"])
 
-    def test_value_with_authorization(self):
+    def assert_encrypted_response(self, user_helper, response, expected_response):
+        # Checking that the response message has the expected format.
+        assert response.status == '200 OK'
+        resp_obj = loads(response.data)
+        assert CIPHERED_RESPONSE_FIELD in resp_obj
+        assert MAC_RESPONSE_FIELD in resp_obj
+
+        # Check that the ciphered text is right:
+        ciphered_resp_ba = binascii.unhexlify(resp_obj[CIPHERED_RESPONSE_FIELD])
+        mac_resp_ba = binascii.unhexlify(resp_obj[MAC_RESPONSE_FIELD])
+
+        # 1. Test that the user understands the sensor's response
+        deciphered_resp = user_helper.decrypt(ciphered_resp_ba)
+        self.assertSequenceEqual(deciphered_resp, expected_response)
+
+        # 2. Test that the user can validate the response received
+        assert user_helper.msg_is_authentic(deciphered_resp, mac_resp_ba)
+
+    def test_value_with_authorization_and_body(self):
         uh = self._get_user_helper(self.USER_ID, self.stuff)
 
         test_message = "holamundo"
@@ -68,29 +86,30 @@ class HttpSensorTestCase(unittest.TestCase):
             INIT_TIME_ARG: self.stuff['init_time'],
             EXP_TIME_ARG: self.stuff['exp_time'],
             COUNTER_ARG: uh.initial_counter,
+            # message body sent
             ENCRYPTED_ARG: binascii.hexlify(uh.encrypt(test_message)),
             MAC_ARG: binascii.hexlify(uh.mac(test_message))
         }
 
         rv = self.app.get('/value', query_string=qs)
 
-        # Checking that the response message has the expected format.
-        assert rv.status == '200 OK'
-        resp_obj = loads(rv.data)
-        assert CIPHERED_RESPONSE_FIELD in resp_obj
-        assert MAC_RESPONSE_FIELD in resp_obj
+        self.assert_encrypted_response(uh, rv, "Nice message.")
 
-        # Check that the ciphered text is right:
-        ciphered_resp_ba = binascii.unhexlify(resp_obj[CIPHERED_RESPONSE_FIELD])
-        mac_resp_ba = binascii.unhexlify(resp_obj[MAC_RESPONSE_FIELD])
+    def test_value_after_authorization(self):
+        uh = self._get_user_helper(self.USER_ID, self.stuff)
+        qs = {
+            USERID_ARG: self.USER_ID,
+            A_ARG: self.stuff['a'],
+            INIT_TIME_ARG: self.stuff['init_time'],
+            EXP_TIME_ARG: self.stuff['exp_time'],
+            COUNTER_ARG: uh.initial_counter
+        }
 
-        # 1. Test that the user understands the sensor's response
-        expected_response = "Nice message."
-        deciphered_resp = uh.decrypt(ciphered_resp_ba)
-        self.assertSequenceEqual(deciphered_resp, expected_response)
+        # FIXME As is, it is a little bit error-prone. Make explicit if it is the first mac call or the followings.
+        uh.mac("foo bar") # just to ensure that the following call will not take into account first extra-arguments!
+        rv = self.app.get('/value', query_string=qs)
 
-        # 2. Test that the user can validate the response received
-        assert uh.msg_is_authentic(deciphered_resp, mac_resp_ba)
+        self.assert_encrypted_response(uh, rv, "Nice message.")
 
 
 if __name__ == '__main__':

@@ -47,8 +47,8 @@ def are_first_communication_args(args):
     a, init time, exp time, ctr in plain text and a MAC obtained
     with KauthS,A.'
     """
-    expected_args = (ENCRYPTED_ARG, A_ARG, INIT_TIME_ARG,
-                     EXP_TIME_ARG, COUNTER_ARG, MAC_ARG)
+    expected_args = (A_ARG, INIT_TIME_ARG,
+                     EXP_TIME_ARG, COUNTER_ARG)
     got_args = args.keys()
     for expected_arg in expected_args:
         if expected_arg not in got_args:
@@ -57,16 +57,13 @@ def are_first_communication_args(args):
 
 
 def encrypt_message(id_user, unencrypted_message):
-    try:
-        cipherresp = sensor.encrypt(id_user, unencrypted_message)
-        macresp = sensor.mac(unencrypted_message, id_user)
-        resp = {
-            CIPHERED_RESPONSE_FIELD: binascii.hexlify(cipherresp),
-            MAC_RESPONSE_FIELD: binascii.hexlify(macresp)
-        }
-        return jsonify(resp)
-    except (UnauthorizedException, NoLongerAuthorizedException):
-        abort(401)
+    cipherresp = sensor.encrypt(id_user, unencrypted_message)
+    macresp = sensor.mac(unencrypted_message, id_user)
+    resp = {
+        CIPHERED_RESPONSE_FIELD: binascii.hexlify(cipherresp),
+        MAC_RESPONSE_FIELD: binascii.hexlify(macresp)
+    }
+    return jsonify(resp)
 
 
 def login_required(key_identifier="default"):
@@ -77,27 +74,35 @@ def login_required(key_identifier="default"):
             if not user_id:
                 abort(400, description="An argument named '%s' was expected." % USERID_ARG)
 
+            a_arg = None
+            init_time_arg = None
+            counter_arg = None
             if are_first_communication_args(request.args):
-                sensor.create_keys(user_id, request.args[A_ARG], float(request.args[INIT_TIME_ARG]),
-                                   float(request.args[EXP_TIME_ARG]), request.args[COUNTER_ARG],
-                                   identifier=key_identifier)
+                a_arg = request.args[A_ARG]
+                init_time_arg = request.args[INIT_TIME_ARG]
+                counter_arg = request.args[COUNTER_ARG]
+                sensor.create_keys(user_id, a_arg, float(init_time_arg), float(request.args[EXP_TIME_ARG]),
+                                   counter_arg, identifier=key_identifier)
 
             # In http it makes sense to receive an empty request,
             # so ENCRYPTED_ARG and MAC_ARG might not be sent by the client.
             # However, our algorithm expects this so the counter used in the ciphering increases.
-            enc_ba = binascii.unhexlify(request.args[ENCRYPTED_ARG])
-            mac_ba = binascii.unhexlify(request.args[MAC_ARG])
             try:
-                decoded_msg = sensor.decrypt(user_id, enc_ba)  # We just use it to check the mac
-                if not sensor.msg_is_authentic(decoded_msg, mac_ba, user_id, request.args[A_ARG], request.args[INIT_TIME_ARG],
-                                               request.args[COUNTER_ARG]):
-                    abort(401)
+                if ENCRYPTED_ARG in request.args:
+                    enc_ba = binascii.unhexlify(request.args[ENCRYPTED_ARG])
+                    decoded_msg = sensor.decrypt(user_id, enc_ba)  # We just use it to check the mac
+
+                    if MAC_ARG in request.args:
+                        mac_ba = binascii.unhexlify(request.args[MAC_ARG])
+                        if not sensor.msg_is_authentic(decoded_msg, mac_ba, user_id, a_arg, init_time_arg, counter_arg):
+                            abort(401)
+
+                # call to the original function
+                unencrypted_msg = f(*args, **kwargs)
+                return encrypt_message(user_id, unencrypted_msg)
             except (UnauthorizedException, NoLongerAuthorizedException):
                 abort(401)
 
-            # call to the original function
-            unencrypted_msg = f(*args, **kwargs)
-            return encrypt_message(user_id, unencrypted_msg)
         wrapped.__name__ = f.__name__
         wrapped.__doc__  = f.__doc__
         return wrapped
