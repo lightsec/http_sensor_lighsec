@@ -95,7 +95,7 @@ class HttpSensorTestCase(unittest.TestCase):
 
         self.assert_encrypted_response(uh, rv, "Nice message.")
 
-    def test_value_after_authorization(self):
+    def test_value_with_authorization_no_body(self):
         uh = self._get_user_helper(self.USER_ID, self.stuff)
         qs = {
             USERID_ARG: self.USER_ID,
@@ -111,6 +111,30 @@ class HttpSensorTestCase(unittest.TestCase):
 
         self.assert_encrypted_response(uh, rv, "Nice message.")
 
+    def test_value_after_authorization(self):
+        uh = self._get_user_helper(self.USER_ID, self.stuff)
+        qs = {
+            USERID_ARG: self.USER_ID,
+            A_ARG: self.stuff['a'],
+            INIT_TIME_ARG: self.stuff['init_time'],
+            EXP_TIME_ARG: self.stuff['exp_time'],
+            COUNTER_ARG: uh.initial_counter
+        }
+
+        # FIXME As is, it is a little bit error-prone. Make explicit if it is the first mac call or the followings.
+        uh.mac("foo bar")  # just to ensure that the following call will not take into account first extra-arguments!
+        response = self.app.get('/value', query_string=qs)
+
+        # needed as the algorithm expects the counter to be updated
+        resp_obj = loads(response.data)
+        ciphered_resp_ba = binascii.unhexlify(resp_obj[CIPHERED_RESPONSE_FIELD])
+        uh.decrypt(ciphered_resp_ba)
+
+        # subsequent calls
+        qs = {USERID_ARG: self.USER_ID}  # just user_id
+        for i in range(2):  # actually one would be enough
+            rv = self.app.get('/value', query_string=qs)
+            self.assert_encrypted_response(uh, rv, "Nice message.")
 
 if __name__ == '__main__':
     unittest.main()
