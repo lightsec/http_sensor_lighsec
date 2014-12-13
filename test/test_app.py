@@ -102,13 +102,11 @@ class HttpSensorTestCase(unittest.TestCase):
             A_ARG: self.stuff['a'],
             INIT_TIME_ARG: self.stuff['init_time'],
             EXP_TIME_ARG: self.stuff['exp_time'],
-            COUNTER_ARG: uh.initial_counter
+            COUNTER_ARG: uh.initial_counter,
+            MAC_ARG: binascii.hexlify(uh.mac(""))
         }
 
-        # FIXME As is, it is a little bit error-prone. Make explicit if it is the first mac call or the followings.
-        uh.mac("foo bar") # just to ensure that the following call will not take into account first extra-arguments!
         rv = self.app.get('/value', query_string=qs)
-
         self.assert_encrypted_response(uh, rv, "Nice message.")
 
     def test_value_after_authorization(self):
@@ -118,11 +116,9 @@ class HttpSensorTestCase(unittest.TestCase):
             A_ARG: self.stuff['a'],
             INIT_TIME_ARG: self.stuff['init_time'],
             EXP_TIME_ARG: self.stuff['exp_time'],
-            COUNTER_ARG: uh.initial_counter
+            COUNTER_ARG: uh.initial_counter,
+            MAC_ARG: binascii.hexlify(uh.mac(""))
         }
-
-        # FIXME As is, it is a little bit error-prone. Make explicit if it is the first mac call or the followings.
-        uh.mac("foo bar")  # just to ensure that the following call will not take into account first extra-arguments!
         response = self.app.get('/value', query_string=qs)
 
         # needed as the algorithm expects the counter to be updated

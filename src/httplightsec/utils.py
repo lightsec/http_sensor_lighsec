@@ -88,14 +88,15 @@ def login_required(key_identifier="default"):
             # so ENCRYPTED_ARG and MAC_ARG might not be sent by the client.
             # However, our algorithm expects this so the counter used in the ciphering increases.
             try:
+                decoded_msg = ""  # If no encrypted message is sent, the algorithm will expect an empty string.
                 if ENCRYPTED_ARG in request.args:
                     enc_ba = binascii.unhexlify(request.args[ENCRYPTED_ARG])
                     decoded_msg = sensor.decrypt(user_id, enc_ba)  # We just use it to check the mac
 
-                    if MAC_ARG in request.args:
-                        mac_ba = binascii.unhexlify(request.args[MAC_ARG])
-                        if not sensor.msg_is_authentic(decoded_msg, mac_ba, user_id, a_arg, init_time_arg, counter_arg):
-                            abort(401)
+                if MAC_ARG in request.args:
+                    mac_ba = binascii.unhexlify(request.args[MAC_ARG])
+                    if not sensor.msg_is_authentic(decoded_msg, mac_ba, user_id, a_arg, init_time_arg, counter_arg):
+                        abort(401)
 
                 # call to the original function
                 unencrypted_msg = f(*args, **kwargs)
