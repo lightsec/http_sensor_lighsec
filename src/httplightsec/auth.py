@@ -1,8 +1,8 @@
-'''
+"""
 Created on 30/11/2014
 
 @author: Aitor Gomez Goiri <aitor.gomez@deusto.es>
-'''
+"""
 import ConfigParser
 from Crypto.Hash.SHA256 import SHA256Hash
 from lightsec.helpers import SensorHelper
