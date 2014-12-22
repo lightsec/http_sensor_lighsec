@@ -26,4 +26,9 @@ setup(name="httpsensorliblightsec",
       },
       packages=["httplightsec"],
       install_requires=["liblightsec", "Flask"],
+      entry_points={
+          'console_scripts': [
+              'run-sensor = httplightsec.run:main',
+          ],
+      },
 )
